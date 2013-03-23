@@ -1,4 +1,9 @@
 java-1.6.0-sun-compat-srpm
 ==========================
 
-JPackage Java cpmpatibility package for Oracle's JDK, updated to current release
+Wrapper for rebuilding JPackage Java cpmpatibility package for
+Oracle's JDK, latest release.
+
+These are rebuilt from RHEL 5, and kept updated to current release.
+
+
