@@ -1,13 +1,12 @@
 %define origin          sun
 %define priority        1603
 %define javaver         1.6.0
-%define buildver        23
+%define buildver        43
 %define upstreamrel     fcs
 
 %define name            java-%{javaver}-%{origin}-compat
 %define version         %{javaver}%{?buildver:.%{buildver}}
-#%define release        0jpp
-%define release         0%{?dist}
+%define release         0.1%{?dist}
 %define cname           java-%{javaver}-%{origin}
 
 %define toplevel_dir    jdk%{javaver}%{?buildver:_%{buildver}}
@@ -24,14 +23,19 @@
 %define fontdir         %{_datadir}/fonts/java
 %define xsldir          %{_datadir}/xml/%{name}-%{version}
 
+%define has_javaws      1
 %define javaws_ver      %{javaver}
 
 %ifarch %{ix86}
 %define has_plugin      1
-%else
-%define has_plugin      0
-%endif
 %define pluginname      %{_jvmdir}/%{jredir}/plugin/i386/ns7/libjavaplugin_oji.so
+%define has_new_plugin  1
+%define pluginname_new  %{_jvmdir}/%{jredir}/lib/i386/libnpjp2.so
+%else
+%define has_plugin      1
+%define has_new_plugin  0
+%define pluginname      %{_jvmdir}/%{jredir}/lib/amd64/libnpjp2.so
+%endif
 # Browser packages (comma separated) for which we trigger plugin symlinking.
 %define browserpkgs     mozilla, firefox, mozilla-firefox, opera, seamonkey
 # Dirs where we manage plugin symlinks, no wildcards here.
@@ -76,7 +80,9 @@ Requires:       jdk = 2000:%{javaver}%{?buildver:_%{buildver}}-%{upstreamrel}
 Requires(post): %{_bindir}/perl
 Conflicts:      kaffe
 BuildRequires:  jpackage-utils >= 0:1.5.38, sed
+%if %{has_javaws}
 Provides:       javaws = %{epoch}:%{javaws_ver}
+%endif
 Provides:       jndi = %{epoch}:%{version}, jndi-ldap = %{epoch}:%{version}
 Provides:       jndi-cos = %{epoch}:%{version}, jndi-rmi = %{epoch}:%{version}
 Provides:       jndi-dns = %{epoch}:%{version}
@@ -123,6 +129,13 @@ Provides:       java-%{javaver}-%{origin}-alsa = %{epoch}:%{version}-%{release}
 # -jdbc
 Provides:       java-%{javaver}-%{origin}-jdbc = %{epoch}:%{version}-%{release}
 #Requires:      %{_libdir}/libodbc.so, %{_libdir}/libodbcinst.so
+# Added by Troy Dawson
+# Helps with upgrades
+Provides:		j2sdk = 2000:1.4.2_99-fcs
+Obsoletes:		j2sdk <= 2000:1.4.2_80-fcs
+Provides:		java-1.4.2-sun-compat = 1.4.2_95-1.jpp
+Obsoletes:		java-1.4.2-sun-compat <= 1.4.2_91-1.jpp
+Provides:		java-1.5.0-sun-compat = 1.5.0.95-1.jpp
 
 %description
 This package provides JPackage compatibility symlinks and directories
@@ -279,6 +292,10 @@ for dir in %{plugindirs} ; do
   install -d -m 755 $RPM_BUILD_ROOT$dir
   ln -sf %{pluginname} $RPM_BUILD_ROOT$dir
   echo "%%ghost $dir/%(basename %{pluginname})" >> %{name}-%{version}.files
+%if %{has_new_plugin}
+  ln -sf %{pluginname_new} $RPM_BUILD_ROOT$dir
+  echo "%%ghost $dir/%(basename %{pluginname_new})" >> %{name}-%{version}.files
+%endif
 done
 %endif
 
@@ -303,6 +320,10 @@ fi
   for dir in %{plugindirs} ; do
     [ -d "$dir" ] &&
       %{_bindir}/find "$dir" -lname %{pluginname} -print0 | xargs -0r rm -f
+    %if %{has_new_plugin}
+    [ -d "$dir" ] &&
+      %{_bindir}/find "$dir" -lname %{pluginname_new} -print0 | xargs -0r rm -f
+    %endif
   done
 } >/dev/null || :
 %endif
@@ -338,8 +359,22 @@ update-alternatives --install %{_bindir}/java java %{jrebindir}/java %{priority}
 --slave %{_mandir}/man1/servertool.1$ext   servertool.1$ext            %{_mandir}/man1/servertool-%{name}.1$ext \
 --slave %{_mandir}/man1/tnameserv.1$ext    tnameserv.1$ext             %{_mandir}/man1/tnameserv-%{name}.1$ext \
 --slave %{_mandir}/man1/unpack200.1$ext    unpack200.1$ext             %{_mandir}/man1/unpack200-%{name}.1$ext \
+%if %{has_javaws}
+--slave %{_bindir}/javaws                  javaws_bin                  %{jrebindir}/javaws \
 --slave %{_mandir}/man1/javaws.1$ext       javaws.1$ext                %{_mandir}/man1/javaws-%{name}.1$ext \
 --slave %{_datadir}/javaws                 javaws                      %{_jvmdir}/%{jrelnk}/javaws
+%endif
+
+%if %{has_plugin}
+{
+  for dir in %{plugindirs} ; do
+    [ -d "$dir" -a -e %{pluginname} ] && ln -sf %{pluginname} "$dir"
+%if %{has_new_plugin}
+    [ -d "$dir" -a -e %{pluginname_new} ] && ln -sf %{pluginname_new} "$dir"
+%endif
+  done
+} >/dev/null || :
+%endif
 
 update-alternatives --install %{_jvmdir}/jre-%{origin} jre_%{origin} %{_jvmdir}/%{jrelnk} %{priority} \
 --slave %{_jvmjardir}/jre-%{origin}        jre_%{origin}_exports     %{_jvmjardir}/%{jrelnk}
@@ -475,10 +510,14 @@ update-alternatives --install %{_jvmdir}/java-%{javaver} java_sdk_%{javaver} %{_
 
 
 %if %{has_plugin}
+
 %triggerin -- %{browserpkgs}
 {
   for dir in %{plugindirs} ; do
     [ -d "$dir" -a -e %{pluginname} ] && ln -sf %{pluginname} "$dir"
+%if %{has_new_plugin}
+    [ -d "$dir" -a -e %{pluginname_new} ] && ln -sf %{pluginname_new} "$dir"
+%endif
   done
 } >/dev/null || :
 %endif
@@ -551,12 +590,14 @@ update-alternatives --remove java_sdk_%{javaver} %{_jvmdir}/%{sdklnk}
 %dir %{jvmjardir}
 %{_jvmdir}/%{jredir}/lib/fonts
 %dir %{_jvmdir}/%{jredir}/lib/security
+%config(noreplace) %{_jvmdir}/%{jredir}/lib/security/blacklist
 %config(noreplace) %{_jvmdir}/%{jredir}/lib/security/cacerts
 %config(noreplace) %{_jvmdir}/%{jredir}/lib/security/java.policy
 %config(noreplace) %{_jvmdir}/%{jredir}/lib/security/java.security
-%config(noreplace) %{_jvmdir}/%{jredir}/lib/security/blacklist
 %config(noreplace) %{_jvmdir}/%{jredir}/lib/security/trusted.libraries
+%if %{has_javaws}
 %config(noreplace) %{_jvmdir}/%{jredir}/lib/security/javaws.policy
+%endif
 %ghost %{_jvmdir}/%{jredir}/lib/security/local_policy.jar
 %ghost %{_jvmdir}/%{jredir}/lib/security/US_export_policy.jar
 %{jvmjardir}/*.jar
@@ -581,31 +622,59 @@ update-alternatives --remove java_sdk_%{javaver} %{_jvmdir}/%{sdklnk}
 
 
 %changelog
-* Sun Jan  2 2011 Nico Kadel-Garcia <nkadel@gmail.com> 0:1.6.0.22-1
-- 1.6.0_23
+* Sat Mar 23 2013 Nico Kadel-Garcia <nkadel@gmail.com> - 0:1.6.0-43.0.1
+- Update to 6u43 release.
 
-* Fri Oct 29 2010 Nico Kadel-Garcia <nkadel@gmail.com> 0:1.6.0.22-1
-- 1.6.0_22.
+* Tue Jun 29 2010 Troy Dawson <dawson@fnal.gov> - 0:1.6.0.20-3.sl5.jpp
+- Changed i386, it now has both old and new plugins.
+  This change was provided by Oleg Sadov
 
-* Sun Aug  1 2010 Nico Kadel-Garcia <nkadel@gmail.com> 0:1.6.0.21
-- 1.6.0_21.
+* Mon Jun 28 2010 Troy Dawson <dawson@fnal.gov> - 0:1.6.0.20-2.sl5.jpp
+- Changed i386 java plugin to be libnpjp2.so
 
-* Wed Apr 18 2010 Nico Kadel-Garcia <nkadel@gmail.com> 0:1.6.0.20
-- 1.6.0_20.
+* Tue Apr 06 2010 Troy Dawson <dawson@fnal.gov> - 0:1.6.0.20-1.sl5.jpp
+- Updated to jdk version 1.6.0-20
 
-* Wed Apr 07 2010 Nico Kadel-Garcia <nkadel@gmail.com> 0:1.6.0.19
-- 1.6.0_19.
-- Add trusted.libraries config file.
-- Eliminate has_jawas option
+* Tue Apr 06 2010 Troy Dawson <dawson@fnal.gov> - 0:1.6.0.19-1.sl5.jpp
+- Updated to jdk version 1.6.0-19
+- Added %{_jvmdir}/%{jredir}/lib/security/trusted.libraries to spec file
 
-* Sat Jan 30 2010 Nico Kadel-Garcia <nkadel@gmail.com> 0:1.6.0.18
-- 1.6.0_18.
+* Fri Nov 13 2009 Troy Dawson <dawson@fnal.gov> - 0:1.6.0.17-3.sl5.jpp
+- Added plugin script into post instead of just trigger
+  this is so that updates of x86_64 will get the plugin
 
-* Wed Nov 18 2009 Nico Kadel-Garcia <nkadel@gmail.com> 0:1.6.0.17
-- 1.6.0_17.
+* Fri Nov 13 2009 Troy Dawson <dawson@fnal.gov> - 0:1.6.0.17-2.sl5.jpp
+- Added plugin for x86_64 version
 
-* Thu Oct  8 2009 Nico Kadel-Garcia <nkadel@gmail.com> 0:1.6.0.16
-- 1.6.0_16.
+* Tue Nov 10 2009 Troy Dawson <dawson@fnal.gov> - 0:1.6.0.17-1.sl5.jpp
+- Updated to jdk version 1.6.0-17
+
+* Mon Nov 03 2008 Troy Dawson <dawson@fnal.gov> - 0:1.6.0.16-1.sl5.jpp
+- Updated to jdk version 1.6.0-16
+- Added %{_jvmdir}/%{jredir}/lib/security/blacklist to spec file
+
+* Mon Nov 03 2008 Troy Dawson <dawson@fnal.gov> - 0:1.6.0.12-1.sl4.jpp
+- Updated to jdk version 1.6.0-12
+- changed javaws to 1 for all arch's
+
+* Mon Nov 03 2008 Troy Dawson <dawson@fnal.gov> - 0:1.6.0.10-3.sl4.jpp
+- Added one more obsoletes
+
+* Mon Nov 03 2008 Troy Dawson <dawson@fnal.gov> - 0:1.6.0.10-2.sl4.jpp
+- Added some provides and Obsoletes for better updating
+
+* Fri Oct 31 2008 Troy Dawson <dawson@fnal.gov> - 0:1.6.0.10-1.sl5.jpp
+- Updated to 1.6.0_10
+- added javaws to the bin directory - patch provided by Klaus Steinberger
+
+* Sat Apr 26 2008 Ville Skyttä <scop at jpackage.org> - 0:1.6.0.06-1jpp
+- 1.6.0_06.
+
+* Mon Mar 10 2008 Ville Skyttä <scop at jpackage.org> - 0:1.6.0.05-1jpp
+- 1.6.0_05.
+
+* Mon Jan 14 2008 Ville Skyttä <scop at jpackage.org> - 0:1.6.0.04-1jpp
+- 1.6.0_04.
 
 * Sat Oct  6 2007 Ville Skyttä <scop at jpackage.org> - 0:1.6.0.03-1jpp
 - 1.6.0_03.
