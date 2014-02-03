@@ -1,7 +1,7 @@
 %define origin          sun
 %define priority        1603
 %define javaver         1.6.0
-%define buildver        43
+%define buildver        45
 %define upstreamrel     fcs
 
 %define name            java-%{javaver}-%{origin}-compat
@@ -622,6 +622,9 @@ update-alternatives --remove java_sdk_%{javaver} %{_jvmdir}/%{sdklnk}
 
 
 %changelog
+* Sun Feb 2 2014 Nico Kadel-Garcia <nkadel@gmail.com> - 0:1.6.0-45.0.1
+- Update to 6u45 release
+
 * Sat Mar 23 2013 Nico Kadel-Garcia <nkadel@gmail.com> - 0:1.6.0-43.0.1
 - Update to 6u43 release.
 
